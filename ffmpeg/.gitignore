@@ -1,0 +1,4 @@
+ffmpeg-*
+include
+lib
+out
