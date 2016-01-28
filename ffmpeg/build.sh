@@ -5,7 +5,8 @@ shopt -s extglob
 # fail hard on any error
 set -e
 
-ffmpeg_archive_name=ffmpeg-2.8.5
+ffmpeg_archive_name=$(basename $(ls -f ffm*.tar.bz2))
+ffmpeg_archive_name="${ffmpeg_archive_name%.tar.bz2}"
 
 in_root=$PWD
 
