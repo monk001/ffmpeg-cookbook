@@ -57,7 +57,6 @@ DISABLE=(
   nonfree
   version3
   symver
-  programs
   encoders
   muxers
 
@@ -78,16 +77,6 @@ if [[ "$debug" == "0" ]]; then
   debug
  )
 fi
-
-for i in ${DISABLE[*]}
-do
-  FEATURES="${FEATURES} --disable-$i"
-done
-
-for i in ${ENABLES[*]}
-do
-  FEATURES="${FEATURES} --enable-$i"
-done
 
 CFLAGS="${CFLAGS} -fvisibility=default -D__DragonFly__ -Wall -Wextra"
 CFLAGS="${CFLAGS} -Wno-deprecated-declarations -Wno-missing-field-initializers"
@@ -347,6 +336,25 @@ function build_ffmpeg() {
   cd $src_root
 
   #**************************
+  # calc features
+
+  if grep -q "disable-programs" configure; then
+   DISABLE=(${DISABLE[@]}
+    programs
+   )
+  fi
+
+  for i in ${DISABLE[*]}
+  do
+    FEATURES="${FEATURES} --disable-$i"
+  done
+
+  for i in ${ENABLES[*]}
+  do
+    FEATURES="${FEATURES} --enable-$i"
+  done
+
+  #**************************
   # path for build
 
   if [[ -f VERSION ]]; then
@@ -372,9 +380,12 @@ function build_ffmpeg() {
 
   build_ffmpeg_$platforms
 
-  #test -d ${PREFIX}/lib && cp -v ${PREFIX}/lib/lib* ${dist_lib_root}
+  make -f ${in_root}/makefile_for_libffmpeg_so platforms=$platforms
 
-  #test -d ${PREFIX}/bin && cp -vf ${PREFIX}/bin/* ${dist_bin_root}
+  test -d ${dist_root}/bin || mkdir -p ${dist_root}/bin
+
+  cp libffmpeg.so ${dist_root}/bin
+  cp libffmpeg_nostrip.so ${dist_root}/bin
 
   echo "Build $platforms done, look in ${output_root} for libraries and executables"
 }

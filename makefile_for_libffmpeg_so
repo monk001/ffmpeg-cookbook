@@ -1,0 +1,76 @@
+# Copyright 2018 lzy0168@gmail.com
+
+ifeq ($(platforms),android)
+  OS=$(shell uname)
+  HOST_ARCH=$(shell uname -m)
+  HOST_SYSTEM=linux-$(HOST_ARCH)
+
+  NDK_BUILD_PATH=$(shell which ndk-build)
+  ANDROID_NDK_HOME=$(shell dirname $(NDK_BUILD_PATH))
+
+  SYSROOT=$(shell find $(ANDROID_NDK_HOME)/platforms -maxdepth 1 -name android-19 | sort -r | head -1)/arch-arm
+  #SYSROOT=$(shell find $(ANDROID_NDK_HOME)/platforms -maxdepth 1 -name android-1[4-9] -o -name android-2* | sort | head -1)/arch-arm
+  CROSS_PREFIX=$(shell find $(ANDROID_NDK_HOME)/toolchains/ -maxdepth 1 -name arm-linux-androideabi-[1-9]* | sort -r | head -1)/prebuilt/$(HOST_SYSTEM)/bin/arm-linux-androideabi-
+
+  CC=$(CROSS_PREFIX)gcc --sysroot=$(SYSROOT)
+  CXX=$(CROSS_PREFIX)g++ --sysroot=$(SYSROOT)
+  LD=$(CROSS_PREFIX)ld --sysroot=$(SYSROOT)
+  RANLIB=$(CROSS_PREFIX)ranlib
+  AR=$(CROSS_PREFIX)ar
+  STRIP=$(CROSS_PREFIX)strip
+  NM=$(CROSS_PREFIX)nm
+else
+  platforms=linux
+
+  STRIP=strip
+endif
+
+CFLAGS += -fvisibility=default -D__DragonFly__ -Wall -Wextra -Wno-deprecated-declarations -Wno-missing-field-initializers
+LDFLAGS += -fno-exceptions
+
+ifeq ($(debug),1)
+CFLAGS += -g -DDEBUG
+LDFLAGS += -ggdb
+else
+CFLAGS += -DNDEBUG
+LDFLAGS += -O2 -Os
+endif
+
+ifeq ($(platforms),android)
+CFLAGS += -pie -fPIE -D__ANDROID__=1 -DANDROID
+LDFLAGS += -pie -fPIE
+else
+CFLAGS += -fPIC
+LDFLAGS += -fpic -fPIC -Wl,-Bsymbolic
+endif
+
+SYS_LIBS += -ldl -lm -lz
+
+ifeq ($(platforms),android)
+SYS_LIBS += -llog
+endif
+
+CFLAGS += -I.
+
+FF_LIBS = -Llibswscale -lswscale
+FF_LIBS += -Llibswresample -lswresample
+FF_LIBS += -Llibavcodec -lavcodec
+FF_LIBS += -Llibavformat -lavformat
+FF_LIBS += -Llibavutil -lavutil
+FF_LIBS += -Llibavfilter -lavfilter
+FF_LIBS += -Llibavdevice -lavdevice
+
+MKFFMPEG="$(CC) -o libffmpeg_nostrip.so $(LDFLAGS) -shared -Wl,--no-whole-archive $(SYS_LIBS) -Wl,--whole-archive $(FF_LIBS) -Wl,--no-whole-archive"
+
+libffmpeg: libavformat/libavformat.a libavcodec/libavcodec.a
+	@echo "-------------------------------------------------------------"
+	@echo "create libffmpeg.so"
+	@eval "$(MKFFMPEG)"
+	@$(STRIP) libffmpeg_nostrip.so -o libffmpeg.so
+
+clean:
+	@rm -rfv libffmpeg.so libffmpeg_nostrip.so
+
+help:
+	@echo "command line:"
+	@echo "  make [platforms=android] [debug=1]
