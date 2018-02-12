@@ -1,12 +1,50 @@
 #!/bin/bash
 
 shopt -s extglob
+shopt -s nocasematch
 
 in_root=$(pwd)
 
 cd $(dirname $(readlink -f $0))
 
-DEBUG=0
+usage() {
+  echo "usage:"
+  echo "  .build-ffmpeg.sh [linux|android|windows] [debug] ffmpeg.package/ffmpeg-2.4.13.tar.bz2"
+  exit 1
+}
+
+platforms=
+ffmpeg_archive=
+debug=0
+
+while [[ ! -z "$1" ]]
+do
+  case "$1" in
+    linux)   platforms=linux;;
+    android) platforms=android;;
+    windows) platforms=windows;;
+    debug)   debug=1;;
+    *) if [[ -f "$(pwd)/$1" ]]; then ffmpeg_archive="$(pwd)/$1"; fi;;
+  esac
+  shift
+done
+
+if [[ -z "$platforms" ]]; then
+  case "$(uname -s)" in
+    linux*) platforms=linux;;
+    mingw*) platforms=windows;;
+    *) echo "unsupport system";;
+  esac
+fi
+
+if [[ -z "$platforms" ]]; then
+  usage
+fi
+
+if [[ -z "$ffmpeg_archive" ]]; then
+  usage
+  exit -1
+fi
 
 ENABLES=(
   static
@@ -29,13 +67,13 @@ DISABLE=(
   ffplay ffprobe ffserver doc
 )
 
-if [[ "$1" != "android" ]]; then
+if [[ "$platforms" != "android" ]]; then
  ENABLES=(${ENABLES[@]}
    pic
  )
 fi
 
-if [[ "$DEBUG" == "0" ]]; then
+if [[ "$debug" == "0" ]]; then
  DISABLE=(${DISABLE[@]}
   debug
  )
@@ -58,7 +96,7 @@ CFLAGS="${CFLAGS} -Wno-deprecated-declarations -Wno-deprecated-declaration"
 
 LDFLAGS="${LDFLAGS} -fno-exceptions"
 
-if [[ "$DEBUG" == "1" ]]; then
+if [[ "$debug" == "1" ]]; then
  CFLAGS="${CFLAGS} -g -DDEBUG"
  LDFLAGS="${LDFLAGS} -ggdb"
 else
@@ -66,7 +104,7 @@ else
  LDFLAGS="${LDFLAGS} -O2 -Os"
 fi
 
-if [[ "$1" == "android" ]]; then
+if [[ "$platforms" == "android" ]]; then
  CFLAGS="${CFLAGS} -D__ANDROID__=1 -DANDROID"
  CFLAGS="${CFLAGS} -pie -fPIE"
  LDFLAGS="${LDFLAGS} -pie -fPIE"
@@ -75,12 +113,6 @@ else
  LDFLAGS="${LDFLAGS} -fpic -fPIC"
 fi
 
-ffmpeg_archive=$(pwd)/$2
-if [[ ! -f "$ffmpeg_archive" ]]; then
-  echo "usage:"
-  echo "  .build-ffmpeg.sh linux|android ffmpeg.package/ffmpeg-2.4.13.tar.bz2"
-  exit -1
-fi
 ffmpeg_archive_name=$(basename $ffmpeg_archive)
 ffmpeg_archive_name="${ffmpeg_archive_name%.tar.*}"
 
@@ -96,7 +128,7 @@ COMPILER=gcc
 
 function die {
   err="Unknown error!"
-  test "$1" && err=$1
+  test "$platforms" && err=$1
   cd ${in_root}
   echo "$err"
   exit -1
@@ -161,7 +193,7 @@ function build_ffmpeg_android {
   #------------------------------
   # others
 
-  if [[ ! -d ${dist_root} ]]; then
+  if [[ ! -f config.mak ]]; then
     echo "ffmpeg configure ..."
 
     ./configure \
@@ -209,7 +241,7 @@ function build_ffmpeg_linux() {
 
   libs=
 
-  if [[ ! -d ${dist_root} ]]; then
+  if [[ ! -f config.mak ]]; then
     #------------------------------
     # configure disable and enable
 
@@ -244,11 +276,11 @@ function build_ffmpeg_linux() {
 }
 
 function build_ffmpeg() {
-  echo "Setting up build environment for $1 $2"
+  echo "Setting up build environment for $platforms $2"
 
   # set environment variables
 
-  ARCH=$2
+  ARCH=$1
 
   top_root=$PWD
 
@@ -277,7 +309,7 @@ function build_ffmpeg() {
     FF_VER=default
   fi
 
-  dist_root=${top_root}/out/$1/ffmpeg/${FF_VER}
+  dist_root=${top_root}/out/$platforms/ffmpeg/${FF_VER}
   #if [[ -n "$ARCH" ]]; then
   #  dist_root=${dist_root}/$ARCH
   #fi
@@ -292,21 +324,21 @@ function build_ffmpeg() {
   #patch the configure script to use an Android-friendly versioning scheme
   #patch -u configure ${patch_root}/ffmpeg-configure.patch || die "Couldn't patch ffmpeg configure script!"
 
-  build_ffmpeg_$1
+  build_ffmpeg_$platforms
 
   #test -d ${PREFIX}/lib && cp -v ${PREFIX}/lib/lib* ${dist_lib_root}
 
   #test -d ${PREFIX}/bin && cp -vf ${PREFIX}/bin/* ${dist_bin_root}
 
-  echo "Build $1 done, look in ${output_root} for libraries and executables"
+  echo "Build $platforms done, look in ${output_root} for libraries and executables"
 }
 
-if [[ "$1" == "linux" ]]; then
-  build_ffmpeg linux
-elif [[ "$1" == "android" ]]; then
+if [[ "$platforms" == "android" ]]; then
   for ARCH in ${ARCHES}; do
-    build_ffmpeg android $ARCH
+    build_ffmpeg $ARCH
   done
+else
+  build_ffmpeg
 fi
 
 cd ${in_root}
