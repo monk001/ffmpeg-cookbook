@@ -5,7 +5,7 @@ shopt -s nocasematch
 
 in_root=$(pwd)
 
-cd $(dirname $(readlink -f $0))
+cd $(dirname $0)
 
 usage() {
   echo "usage:"
@@ -249,6 +249,52 @@ function build_ffmpeg_linux() {
     # others
 
     echo "ffmpeg configure ..."
+
+    ./configure \
+      --prefix=${dist_root} \
+      \
+      ${FEATURES} \
+      \
+      --extra-cflags="${CFLAGS}" \
+      --extra-cxxflags="${CFLAGS}" \
+      \
+      --extra-ldflags="${LDFLAGS}" \
+      \
+      --extra-libs="${libs}" \
+      \
+      --pkg-config=$(which pkg-config) \
+      || die "Couldn't configure ffmpeg!"
+
+    # build
+    make clean   || die "Couldn't clean ffmpeg!"
+    make -j$(($(nproc)-1)) || die "Couldn't build ffmpeg!"
+  else
+    make
+  fi
+
+  make install || die "Couldn't install ffmpeg!"
+}
+
+function build_ffmpeg_windows() {
+  echo "Building ffmpeg for windows ..."
+
+  #**************************
+  # setting
+
+  libs=
+
+  if [[ ! -f config.mak ]]; then
+    #------------------------------
+    # configure disable and enable
+
+    #------------------------------
+    # others
+
+    echo "ffmpeg configure ..."
+
+    if [[ $(uname -s) == *64* ]]; then
+      sed -i "s/mingw32/mingw64/g" configure
+    fi
 
     ./configure \
       --prefix=${dist_root} \
